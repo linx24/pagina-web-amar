@@ -1,0 +1,358 @@
+(() => {
+  const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+  const CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+
+  let bluetoothDevice = null;
+  let characteristic = null;
+  let databaseDeviceId = null;
+  let currentUserId = null;
+  let lastSeenUpdate = 0;
+  let lastReadingAttemptAt = 0;
+  const READING_SAVE_INTERVAL_MS = 60000;
+  let savingReading = false;
+  let readingErrorShown = false;
+
+  function setConnectionStatus(text) {
+    const badge = document.querySelector('#deviceBadge');
+    if (badge) badge.textContent = text;
+  }
+
+  function updateReading(data) {
+    const bpm = document.querySelector('#bpm');
+    const readingTime = document.querySelector('#readingTime');
+    const heartState = document.querySelector('#heartState');
+    const waveform = document.querySelector('#heartbeatWave');
+    const waveformBox = document.querySelector('.heartbeat-visual');
+
+    const validReading =
+      Number.isInteger(data.lpm) &&
+      data.lpm > 0 &&
+      data.lpm <= 300 &&
+      data.sensor_state === 'midiendo' &&
+      Number.isFinite(data.quality) &&
+      data.quality >= 3;
+
+    if (validReading) {
+      if (waveformBox) {
+        waveformBox.dataset.lpm = String(data.lpm);
+        waveformBox.classList.add('is-live');
+      }
+      if (waveform) {
+        waveform.style.setProperty(
+          '--beat-duration',
+          `${Math.max(0.45, Math.min(1.5, 60 / data.lpm))}s`
+        );
+      }
+      if (bpm) bpm.textContent = String(data.lpm);
+      if (readingTime) {
+        readingTime.textContent = new Date().toLocaleTimeString('es-AR');
+      }
+      if (heartState) heartState.textContent = 'Monitoreando';
+      return;
+    }
+
+    // No mostrar como actual una medición cuando el sensor perdió la señal.
+    if (bpm) bpm.textContent = '--';
+    if (readingTime) readingTime.textContent = 'Sin lectura válida';
+    if (waveformBox) waveformBox.classList.remove('is-live');
+
+    const states = {
+      sin_dedo: 'Colocá el dedo en el sensor',
+      estabilizando: 'Estabilizando lectura',
+      error_sensor: 'Error del sensor',
+      sin_datos: 'Esperando datos del sensor',
+      midiendo: 'Señal insuficiente; mantené el dedo quieto'
+    };
+    if (heartState) {
+      heartState.textContent = states[data.sensor_state] || 'Esperando una lectura válida';
+    }
+  }
+
+  async function saveReading(data) {
+    if (
+      !currentUserId ||
+      !Number.isFinite(data.lpm) ||
+      !Number.isInteger(data.lpm) ||
+      data.lpm <= 0 ||
+      data.lpm > 300 ||
+      data.sensor_state !== 'midiendo' ||
+      !Number.isFinite(data.quality) ||
+      data.quality < 3 ||
+      savingReading ||
+      Date.now() - lastReadingAttemptAt < READING_SAVE_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    savingReading = true;
+    lastReadingAttemptAt = Date.now();
+
+    try {
+      const parsedDate = data.timestamp ? Date.parse(data.timestamp) : NaN;
+      const recordedAt = Number.isFinite(parsedDate)
+        ? new Date(parsedDate).toISOString()
+        : new Date().toISOString();
+
+      const { error } = await supabaseClient
+        .from('heart_readings')
+        .insert({
+          user_id: currentUserId,
+          lpm: data.lpm,
+          recorded_at: recordedAt
+        });
+
+      if (error) throw error;
+
+      readingErrorShown = false;
+
+      // Mantener el historial y los resúmenes sincronizados sin recargar la página.
+      if (typeof heartReadings !== 'undefined' && Array.isArray(heartReadings)) {
+        heartReadings.push({ lpm: data.lpm, recorded_at: recordedAt });
+        if (typeof renderDailySummary === 'function') renderDailySummary();
+        if (typeof renderCalendar === 'function') renderCalendar();
+      }
+
+      const now = Date.now();
+      if (databaseDeviceId && now - lastSeenUpdate >= 15000) {
+        lastSeenUpdate = now;
+
+        const { error: updateError } = await supabaseClient
+          .from('devices')
+          .update({ last_seen_at: new Date(now).toISOString() })
+          .eq('id', databaseDeviceId)
+          .eq('user_id', currentUserId);
+
+        if (updateError) {
+          console.error('No se pudo actualizar last_seen_at:', updateError);
+        }
+      }
+    } catch (error) {
+      console.error('Error al guardar la lectura en Supabase:', error);
+
+      if (!readingErrorShown) {
+        readingErrorShown = true;
+        alert(
+          'El ESP32 transmite datos, pero no se pudo guardar la lectura en Supabase. ' +
+          'Revisá la consola del navegador para ver el error exacto.'
+        );
+      }
+    } finally {
+      savingReading = false;
+    }
+  }
+
+  async function handleNotification(event) {
+    const value = event.target.value;
+    const bytes = new Uint8Array(
+      value.buffer,
+      value.byteOffset,
+      value.byteLength
+    );
+
+    try {
+      const json = new TextDecoder().decode(bytes);
+      const data = JSON.parse(json);
+
+      if (window.AMARAlerts?.processReading) {
+        const resultado = window.AMARAlerts.processReading(data);
+
+        if (
+          resultado.changed &&
+          (resultado.level === "critical" || resultado.level === "warning")
+        ) {
+          console.info(
+            "A.M.A.R.: cambio de estado detectado.",
+            resultado.level,
+            resultado.reason
+          );
+        }
+      }
+
+      updateReading(data);
+      await saveReading(data);
+    } catch (error) {
+      console.error('No se pudo interpretar la telemetría BLE:', error);
+    }
+  }
+
+  async function handleDisconnect() {
+    const disconnectedDeviceId = databaseDeviceId;
+    const disconnectedUserId = currentUserId;
+    const device = bluetoothDevice;
+
+    characteristic?.removeEventListener(
+      'characteristicvaluechanged',
+      handleNotification
+    );
+
+    if (device) {
+      device.removeEventListener(
+        'gattserverdisconnected',
+        handleDisconnect
+      );
+    }
+
+    characteristic = null;
+    databaseDeviceId = null;
+    currentUserId = null;
+    bluetoothDevice = null;
+    setConnectionStatus('Desconectado');
+    const bpm = document.querySelector('#bpm');
+    const readingTime = document.querySelector('#readingTime');
+    const heartState = document.querySelector('#heartState');
+    const waveformBox = document.querySelector('.heartbeat-visual');
+    if (bpm) bpm.textContent = '--';
+    if (readingTime) readingTime.textContent = 'Sin conexión';
+    if (heartState) heartState.textContent = 'Dispositivo desconectado';
+    if (waveformBox) waveformBox.classList.remove('is-live');
+
+    if (disconnectedDeviceId && disconnectedUserId) {
+      try {
+        const { error } = await supabaseClient
+          .from('devices')
+          .update({ status: 'offline' })
+          .eq('id', disconnectedDeviceId)
+          .eq('user_id', disconnectedUserId);
+
+        if (error) {
+          console.error('No se pudo actualizar el estado offline:', error);
+        }
+      } catch (error) {
+        console.error('Error al actualizar el estado offline:', error);
+      }
+    }
+
+    console.info('El ESP32 se desconectó.');
+
+    if (typeof window.loadDashboard === 'function') {
+      await window.loadDashboard();
+    }
+  }
+
+  async function connectAMARBluetooth(displayName) {
+    if (!navigator.bluetooth) {
+      throw new Error(
+        'Este navegador no admite Web Bluetooth. Usá Chrome o Edge en una página HTTPS.'
+      );
+    }
+
+    // Debe ejecutarse directamente desde el clic del usuario.
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'A.M.A.R' }],
+      optionalServices: [SERVICE_UUID]
+    });
+
+    const { data: authData, error: authError } =
+      await supabaseClient.auth.getUser();
+
+    if (authError) throw authError;
+    if (!authData.user) {
+      throw new Error('Tu sesión expiró. Iniciá sesión nuevamente.');
+    }
+
+    currentUserId = authData.user.id;
+    bluetoothDevice = device;
+
+    device.addEventListener(
+      'gattserverdisconnected',
+      handleDisconnect
+    );
+
+    try {
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(SERVICE_UUID);
+
+      characteristic = await service.getCharacteristic(
+        CHARACTERISTIC_UUID
+      );
+
+      const name = (displayName || 'ESP32 A.M.A.R').trim();
+
+      const { data: existingDevice, error: searchError } =
+        await supabaseClient
+          .from('devices')
+          .select('id')
+          .eq('user_id', currentUserId)
+          .eq('name', name)
+          .limit(1)
+          .maybeSingle();
+
+      if (searchError) throw searchError;
+
+      if (existingDevice) {
+        databaseDeviceId = existingDevice.id;
+
+        const { error } = await supabaseClient
+          .from('devices')
+          .update({
+            status: 'online',
+            last_seen_at: new Date().toISOString()
+          })
+          .eq('id', databaseDeviceId)
+          .eq('user_id', currentUserId);
+
+        if (error) throw error;
+      } else {
+        const { data: newDevice, error } = await supabaseClient
+          .from('devices')
+          .insert({
+            user_id: currentUserId,
+            name,
+            status: 'online',
+            last_seen_at: new Date().toISOString()
+          })
+          .select('id')
+          .single();
+
+        if (error) throw error;
+        databaseDeviceId = newDevice.id;
+      }
+
+      characteristic.addEventListener(
+        'characteristicvaluechanged',
+        handleNotification
+      );
+
+      await characteristic.startNotifications();
+
+      // Sin Wi-Fi, el navegador sincroniza el reloj del ESP32 al conectar.
+      try {
+        const timestampPayload = new TextEncoder().encode(
+          JSON.stringify({ timestamp: new Date().toISOString() })
+        );
+
+        if (typeof characteristic.writeValueWithResponse === 'function') {
+          await characteristic.writeValueWithResponse(timestampPayload);
+        } else {
+          await characteristic.writeValue(timestampPayload);
+        }
+      } catch (timeError) {
+        // La conexión y las lecturas siguen disponibles aunque falle la sincronización horaria.
+        console.warn('No se pudo sincronizar la hora del ESP32:', timeError);
+      }
+
+      setConnectionStatus('Conectado');
+      console.info('Bluetooth conectado:', device.name);
+
+      if (typeof window.loadDashboard === 'function') {
+        await window.loadDashboard();
+      }
+
+      return device.name;
+    } catch (error) {
+      if (device.gatt.connected) device.gatt.disconnect();
+      throw error;
+    }
+  }
+
+  async function disconnectAMARBluetooth() {
+    if (bluetoothDevice?.gatt?.connected) {
+      bluetoothDevice.gatt.disconnect();
+    } else {
+      await handleDisconnect();
+    }
+  }
+
+  window.connectAMARBluetooth = connectAMARBluetooth;
+  window.disconnectAMARBluetooth = disconnectAMARBluetooth;
+})();

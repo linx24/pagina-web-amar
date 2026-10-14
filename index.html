@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0B1220">
+  <title>A.M.A.R. — Asistente de Monitoreo Autónomo de Ritmo</title>
+  <link rel="stylesheet" href="style.css?v=20261011-contacts-equal-buttons">
+</head>
+<body>
+
+  <!-- Vista: Iniciar sesión -->
+  <main id="loginView" class="view auth active">
+    <aside class="aside">
+      <div class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 12h4l2.2-5.2L13 17l2.4-5H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 21s-8.5-4.7-8.5-11.2A4.8 4.8 0 0 1 12 6.9a4.8 4.8 0 0 1 8.5 2.9C20.5 16.3 12 21 12 21Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" opacity=".55"/></svg></span>A.M.A.R.</div>
+      <div>
+        <h1>Tu seguridad, más cerca.</h1>
+        <p>Asistente de Monitoreo Autónomo de Ritmo. Consultá el estado de tu dispositivo y tus alertas en un solo lugar.</p>
+      </div>
+      <small class="legal">No diagnostica enfermedades ni reemplaza la atención médica.</small>
+    </aside>
+    <section class="auth-panel">
+      <form id="loginForm" class="form">
+        <h2>Iniciar sesión</h2>
+        <p class="lead">Ingresá para consultar tu panel de monitoreo.</p>
+        <div class="field">
+          <label for="loginEmail">Correo electrónico</label>
+          <input id="loginEmail" type="email" autocomplete="email" required placeholder="nombre@correo.com">
+        </div>
+        <div class="field">
+          <label for="loginPassword">Contraseña</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" required placeholder="Tu contraseña">
+        </div>
+        <button id="loginBtn" class="primary" type="submit">Ingresar</button>
+        <div class="message" id="loginMessage"></div>
+        <p class="switch-text">¿No tenés cuenta? <a href="#" data-show="registerView">Crear cuenta</a></p>
+      </form>
+    </section>
+  </main>
+
+  <!-- Vista: Crear cuenta (Registro) -->
+  <main id="registerView" class="view auth">
+    <aside class="aside">
+      <div class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 12h4l2.2-5.2L13 17l2.4-5H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 21s-8.5-4.7-8.5-11.2A4.8 4.8 0 0 1 12 6.9a4.8 4.8 0 0 1 8.5 2.9C20.5 16.3 12 21 12 21Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" opacity=".55"/></svg></span>A.M.A.R.</div>
+      <div>
+        <h1>Empezamos paso a paso.</h1>
+        <p>Creá tu cuenta para preparar el monitoreo y los contactos de emergencia.</p>
+      </div>
+      <small class="legal">No diagnostica enfermedades ni reemplaza la atención médica.</small>
+    </aside>
+    <section class="auth-panel">
+      <form id="registerForm" class="form">
+        <h2>Crear cuenta</h2>
+        <p class="lead">Tus datos se guardan de forma segura.</p>
+        <div class="field">
+          <label for="name">Nombre</label>
+          <input id="name" required placeholder="Tu nombre">
+        </div>
+        <div class="field">
+          <label for="registerEmail">Correo electrónico</label>
+          <input id="registerEmail" type="email" required placeholder="nombre@correo.com">
+        </div>
+        <div class="field">
+          <label for="registerPassword">Contraseña</label>
+          <input id="registerPassword" type="password" minlength="6" required placeholder="Mínimo 6 caracteres">
+        </div>
+        <button id="registerBtn" class="primary" type="submit">Crear cuenta</button>
+        <div class="message" id="registerMessage"></div>
+        <p class="switch-text">¿Ya tenés cuenta? <a href="#" data-show="loginView">Iniciar sesión</a></p>
+      </form>
+    </section>
+  </main>
+
+  <!-- Vista: Panel principal (Dashboard) -->
+  <main id="appView" class="view app">
+    <aside class="side">
+      <div class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 12h4l2.2-5.2L13 17l2.4-5H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 21s-8.5-4.7-8.5-11.2A4.8 4.8 0 0 1 12 6.9a4.8 4.8 0 0 1 8.5 2.9C20.5 16.3 12 21 12 21Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" opacity=".55"/></svg></span>A.M.A.R.</div>
+      <nav class="nav">
+        <button type="button" class="active" data-panel="homeSection" aria-label="Ir al inicio">⌂ Inicio</button>
+        <button type="button" data-panel="historySection" aria-label="Ver historial cardíaco">◷ Historial</button>
+        <button id="addDevice" type="button">⌁ Vincular ESP32</button>
+        <button id="addContact" type="button">♧ Contactos</button>
+      </nav>
+      <div class="sidebar-account">
+        <div class="sidebar-user-label">Sesión iniciada</div>
+        <h2>Hola, <span id="patientName">Paciente</span></h2>
+        <button type="button" class="sidebar-profile-edit" onclick="editProfile()">Editar perfil</button>
+        <button class="logout" id="logout">Cerrar sesión</button>
+      </div>
+    </aside>
+    <section class="dashboard">
+      <header class="top">
+        <div class="top-heading">
+          <small>MONITOREO PERSONAL</small>
+          <h1>Tu panel de salud</h1>
+          <p>Consultá tus lecturas y el estado de tu dispositivo A.M.A.R.</p>
+        </div>
+        <span id="deviceBadge" class="badge">Sin dispositivo</span>
+      </header>
+      <div id="homeSection" class="dashboard-section active">
+      <div class="grid">
+        <article class="card pulse">
+          <h3>Frecuencia cardíaca</h3>
+          <div class="heart">♥</div>
+          <div class="bpm" id="bpm">--</div>
+          <div class="heartbeat-visual" aria-label="Animación visual vinculada a las lecturas, no es un electrocardiograma">
+            <svg viewBox="0 0 320 64" role="img" aria-hidden="true">
+              <path class="heartbeat-grid" d="M0 32H320"></path>
+              <path id="heartbeatWave" class="heartbeat-wave" d="M0 32 L55 32 L68 32 L78 22 L87 43 L100 5 L114 53 L126 32 L148 32 L160 32 L170 22 L179 43 L192 5 L206 53 L218 32 L240 32 L252 32 L262 22 L271 43 L284 5 L298 53 L310 32 L320 32"></path>
+            </svg>
+            <small>Visualización orientativa · no es un ECG</small>
+          </div>
+          <div class="unit">latidos por minuto</div>
+          <div id="heartState" class="state">Esperando lecturas del dispositivo</div>
+          <button type="button" id="manualSOS" class="sos-button">
+            Solicitar ayuda (SOS)
+          </button>
+        </article>
+        <article class="card metric">
+          <small>Última lectura</small>
+          <b id="readingTime">Sin datos</b>
+        </article>
+        <article class="card wide daily-summary-card">
+          <h3>Resumen de hoy</h3>
+          <div id="dailySummary" class="calendar-summary">
+            <p class="empty">Cargando resumen diario...</p>
+          </div>
+        </article>
+
+
+        <article class="card metric">
+          <small>Contactos de emergencia</small>
+          <b id="contactsCount">0</b>
+        </article>
+                <article class="card wide">
+          <h3>Mis dispositivos</h3>
+          <div id="devicesList" class="record-list">
+            <p class="empty">Cargando dispositivos...</p>
+          </div>
+        </article>
+
+	 <article class="card wide">
+          <h3>Mis contactos de emergencia</h3>
+          <div id="contactsList" class="record-list">
+            <p class="empty">Cargando contactos...</p>
+          </div>
+        </article>
+	<article class="card wide">
+          <h3>Ubicación más reciente</h3>
+          <div class="empty" id="location">Todavía no se recibió una ubicación.</div>
+        </article>
+        <article class="card wide danger">
+          <h3>Última alerta</h3>
+          <div class="empty" id="alert">No hay alertas registradas.</div>
+        </article>
+
+      </div>
+      </div>
+
+        <div id="historySection" class="dashboard-section">
+<article class="card wide heart-history-card">
+  <h3>Seguimiento cardíaco</h3>
+  <div class="calendar-toolbar">
+    <button type="button" id="prevMonth" class="calendar-nav" aria-label="Mes anterior">&#8592;</button>
+    <strong id="calendarMonth">Cargando mes...</strong>
+    <button type="button" id="nextMonth" class="calendar-nav" aria-label="Mes siguiente">&#8594;</button>
+  </div>
+  <div class="calendar-legend">
+    <span><i class="legend-dot has-readings"></i> Día con mediciones</span>
+    <span><i class="legend-dot"></i> Sin mediciones</span>
+  </div>
+  <div id="calendarGrid" class="calendar-grid" aria-label="Calendario mensual"></div>
+  <h4>Resumen de esta semana</h4>
+  <div id="weeklySummary" class="calendar-summary">
+    <p class="empty">Cargando resumen semanal...</p>
+  </div>
+  <h4>Resumen del mes</h4>
+  <div id="calendarSummary" class="calendar-summary">
+    <p class="empty">Cargando resumen mensual...</p>
+  </div>
+  <div class="selected-day">
+    <h4 id="selectedDateTitle">Mediciones del día</h4>
+    <div id="historyList" class="record-list">
+      <p class="empty">Cargando historial...</p>
+    </div>
+  </div>
+</article>
+        </div>
+    </section>
+  </main>
+
+  <!-- Modal -->
+  <div id="modal" class="modal">
+    <div class="modal-card" id="modalContent"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+    <script src="js/core.js"></script>
+  <script src="js/profile.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/devices.js"></script>
+  <script src="js/contacts.js?v=20261011-no-email-equal-actions"></script>
+  <script src="js/history.js?v=20261011-history-pagination"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/alerts.js?v=20261011-sos-polish-2"></script>
+  <script src="js/bluetooth.js?v=20261011-ble-final"></script>
+  <script src="app.js?v=20261011-safe-device-name"></script>
+</body>
+</html>
